@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from google.protobuf.descriptor import FileDescriptor
+
 """Functions to encode and decode values with schema information.
 
 In order to benefit from using a schema registry with Kafka, key and

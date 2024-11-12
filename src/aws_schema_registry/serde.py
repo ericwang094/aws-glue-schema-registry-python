@@ -14,6 +14,9 @@ from aws_schema_registry.naming import (
     SchemaNamingStrategy, topic_name_strategy
 )
 from aws_schema_registry.schema import CompatibilityMode, Schema, SchemaVersion
+from google.protobuf.descriptor import Descriptor, FileDescriptor
+
+from src.aws_schema_registry.protobuf_schema import ProtobufSchema
 
 LOG = logging.getLogger(__name__)
 
@@ -102,11 +105,19 @@ class KafkaDeserializer:
         self,
         client: SchemaRegistryClient,
         return_record_name: bool = False,
-        secondary_deserializer=None
+        secondary_deserializer=None,
     ):
         self.client = client
         self.return_record_name = return_record_name
         self.secondary_deserializer = secondary_deserializer
+
+    @property
+    def file_descriptor(self) -> FileDescriptor:
+        return self.file_descriptor
+
+    @file_descriptor.setter
+    def file_descriptor(self, file_descriptor: FileDescriptor) -> None:
+        self.file_descriptor = file_descriptor
 
     def deserialize(self, topic: str, bytes_: bytes):
         if bytes_ is None:
@@ -125,7 +136,12 @@ class KafkaDeserializer:
                 ) from e
         writer_schema_version = self._get_schema_version(schema_version_id)
         writer_schema = self._schema_for_version(writer_schema_version)
-        return DataAndSchema(writer_schema.read(data_bytes), writer_schema)
+
+        if writer_schema_version.data_format == 'PROTOBUF':
+            writer_schema.file_descriptor = self.file_descriptor
+
+        data = writer_schema.read(data_bytes)
+        return DataAndSchema(data, writer_schema)
 
     @functools.lru_cache(maxsize=None)
     def _get_schema_version(self, version_id: UUID):
@@ -138,3 +154,5 @@ class KafkaDeserializer:
             return AvroSchema(version.definition)
         elif version.data_format == 'JSON':
             return JsonSchema(version.definition)
+        elif version.data_format == 'PROTOBUF':
+            return ProtobufSchema(version.definition)
